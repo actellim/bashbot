@@ -1,10 +1,9 @@
 # Bashbot
 
-Bashbot is a command line tool designed to invoke a model in ollama through the shell. 
+Bashbot is a command line tool designed to invoke a model in ollama through the shell. The eventual goal is to add agentic capabilities. Enpowering the models to interact with the world, using tool calls, in anticipation of more capable local models.
 
 ## Future Plans
 
-- Implement a way to store calls.
 - Implement a way to search through past calls as a form of psuedo "memory".
 - Design tools for the model to use, specifically:
     - A way for the model to query it's own memories.

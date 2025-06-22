@@ -1,1 +1,10 @@
-
+# Database
+memory.db 
+# Modelfile
+modelfile 
+# Tests
+stream_capture.sh 
+context_test.sh 
+insert_test.sh
+# Text
+*.txt 
