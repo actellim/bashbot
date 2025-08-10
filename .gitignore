@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+
+memory.db
+
+Modelfile
+model_info_*.txt
+raw_chat_stream.log
+*.log
+output.txt
+venv/
+*.env
+.env

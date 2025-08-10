@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "function": {
+    "name": "memory_query",
+    "description": "Searches your conversation memory to recall past facts or context from the user. Use this if the user asks a question about something they said earlier, like 'what was the color code?'.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The keyword or phrase to search for in the user's past messages."
+        }
+      },
+      "required": ["query"]
+    }
+  }
+}
