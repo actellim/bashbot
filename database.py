@@ -86,7 +86,7 @@ class DatabaseManager:
 
         cursor.execute(
                 """
-                SELECT timestamp, role, content
+                SELECT turn_id, timestamp, role, content
                 FROM conversations
                 WHERE content LIKE ? AND role IN ('user', 'assistant')
                 ORDER BY id DESC LIMIT 5;
@@ -100,7 +100,7 @@ class DatabaseManager:
 
         # Format the results into a clean string for the LLM
         formatted_results = [
-                f"--- Memory Found ---\nTimestamp: {row['timestamp']}\nRole: {row['role']}\nContent: {row['content']}"
+                f"--- Memory Found ---\nTurn ID: {row['turn_id']}\nTimestamp: {row['timestamp']}\nRole: {row['role']}\nContent: {row['content']}"
                 for row in results
                 ]
         return "\n\n".join(formatted_results)

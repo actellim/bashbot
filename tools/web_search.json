@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "function": {
+    "name": "web_search",
+    "description": "Searches the internet for information on a given topic. Use this for questions about current events, facts, or anything you don't know the answer to. Do NOT use it to search your own memory.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The search query to send to the search engine."
+        }
+      },
+      "required": ["query"]
+    }
+  }
+}

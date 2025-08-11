@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "function": {
+    "name": "web_reader",
+    "description": "Fetches the full, clean, readable text content from a single URL. Use this *after* a `web_search` to get more details from a specific, promising search result URL.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "The full URL of the webpage to read."
+        }
+      },
+      "required": ["url"]
+    }
+  }
+}

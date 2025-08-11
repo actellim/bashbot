@@ -114,9 +114,16 @@ def main():
 
             if tool_name in AVAILABLE_TOOLS:
                 tool_function = AVAILABLE_TOOLS[tool_name]
+
+                import inspect
+                func_sig = inspect.signature(tool_function)
+                final_tool_args = tool_args
+                if 'db' in func_sig.parameters:
+                    final_tool_args['db'] = db
+
                 try:
                     # Execute the tool function, passing the DB and args
-                    result_content = str(tool_function(db=db, **tool_args))
+                    result_content = str(tool_function(**final_tool_args))
                 except Exception as e:
                     result_content = f"[TOOL_ERROR] An unexpected error occurred: {e}"
 
