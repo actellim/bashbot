@@ -3,6 +3,7 @@ import os
 import argparse
 import requests
 import sys
+import inspect
 
 from database import DatabaseManager
 from config import *
@@ -63,6 +64,7 @@ def main():
         try:
             with requests.post(f"{OLLAMA_HOST}/api/chat", json=payload, stream=True) as response:
                 response.raise_for_status() # Will raise an exception for bad status codes
+                final_stats_chunk = {}
                 for chunk in response.iter_lines():
                     if chunk:
                         chunk_json = json.loads(chunk)
@@ -70,7 +72,7 @@ def main():
                         thinking_part = chunk_json['message'].get('thinking', '')
                         if thinking_part:
                             if not thinking_printed:
-                                print(f"{Colors.GREY}Thinking:{Colors.RESET}", end='', flush=True)
+                                print(f"{Colors.GREY}Thinking:{Colors.RESET} ", end='', flush=True)
                                 thinking_printed = True
                             print(f"{Colors.GREY}{thinking_part}{Colors.RESET}", end='', flush=True) 
                             full_thoughts += thinking_part
@@ -87,6 +89,7 @@ def main():
                             tool_calls.extend(chunk_json['message']['tool_calls'])
 
                         if chunk_json.get('done'):
+                            final_stats_chunk = chunk_json
                             break
 
         except requests.exceptions.RequestException as e:
@@ -104,38 +107,59 @@ def main():
             print(f"\n{Colors.GREY}---Task Complete---{Colors.RESET}")
             break
 
-        messages_for_turn.append({"role": "assistant", "content": full_content, "tool_calls": tool_calls})
+        else:
+            print(f"{Colors.GREY}---Executing Tools---{Colors.RESET}")
+            messages_for_turn.append({"role": "assistant", "content": full_content, "tool_calls": tool_calls})
+            for tool_call in tool_calls:
+                tool_name = tool_call['function']['name']
+                tool_args = tool_call['function']['arguments']
 
-        for tool_call in tool_calls:
-            tool_name = tool_call['function']['name']
-            tool_args = tool_call['function']['arguments']
+                print(f"{Colors.GREY}<Executing tool: {tool_name}({json.dumps(tool_args)})>{Colors.RESET}")
 
-            print(f"{Colors.GREY}<Executing tool: {tool_name}({json.dumps(tool_args)})>{Colors.RESET}")
+                if tool_name in AVAILABLE_TOOLS:
+                    tool_function = AVAILABLE_TOOLS[tool_name]
+                    func_sig = inspect.signature(tool_function)
 
-            if tool_name in AVAILABLE_TOOLS:
-                tool_function = AVAILABLE_TOOLS[tool_name]
+                    final_tool_args = tool_args.copy()
+                    if 'db' in func_sig.parameters:
+                        final_tool_args['db'] = db
 
-                import inspect
-                func_sig = inspect.signature(tool_function)
-                final_tool_args = tool_args
-                if 'db' in func_sig.parameters:
-                    final_tool_args['db'] = db
+                    try:
+                        result_content = str(tool_function(**final_tool_args))
+                    except Exception as e:
+                        result_content = f"[TOOL_ERROR] An unexpected error occurred: {e}"
 
-                try:
-                    # Execute the tool function, passing the DB and args
-                    result_content = str(tool_function(**final_tool_args))
-                except Exception as e:
-                    result_content = f"[TOOL_ERROR] An unexpected error occurred: {e}"
+                    tool_response_message = {"role": "tool", "content": result_content}
+                    messages_for_turn.append(tool_response_message)
+                    db.add_message(turn_id, "tool", result_content)
+                    print(f"{Colors.GREY}<Tool Output>\n{result_content}\n</Tool Output>{Colors.RESET}")
 
-                # Add the tool's result to the message history for the next loop 
-                tool_response_message = {"role": "tool", "content": result_content}
-                messages_for_turn.append(tool_response_message)
-                db.add_message(turn_id, "tool", result_content)
-            else:
-                print(f"{Colors.GREY}[TOOL_ERROR] Model tried to call unknown tool: {tool_name}{Colors.RESET}")
-                error_message = f"Tool '{tool_name}' not found in available tools."
-                messages_for_turn.append({"role": "tool", "content": error_message})
-                db.add_message(turn_id, "tool", error_message)
+                else:
+                    print(f"{Colors.GREY}[TOOL_ERROR] Model tried to call unknown tool: {tool_name}{Colors.RESET}")
+                    error_message = f"Tool '{tool_name}' not found."
+                    messages_for_turn.append({"role": "tool", "content": error_message})
+                    db.add_message(turn_id, "tool", error_message)
+                    
+
+    #---6: Print Metrics---
+    if final_stats_chunk:
+        prompt_tokens = final_stats_chunk.get('prompt_eval_count', 0)
+        response_tokens = final_stats_chunk.get('eval_count', 0)
+        total_tokens = prompt_tokens + response_tokens
+
+        # Calc the tokens per second (eval duration is in ns)
+        eval_duration_ns = final_stats_chunk.get('eval_duration', 1)
+        tokens_per_sec = response_tokens / (eval_duration_ns / 1_000_000_000)
+
+        # Get total context from the modelfile para, which we'll store in config.
+        # For now, we'll use a placeholder from config.py 
+        total_context = MODEL_CONTEXT_WINDOW
+
+        print(f"\n{Colors.GREY}---Metrics---")
+        print(f"Context: {prompt_tokens} / {total_context} tokens")
+        print(f"Output: {response_tokens} tokens")
+        print(f"Speed: {tokens_per_sec:.2f} tokens/sec")
+        print(f"-------------{Colors.RESET}")
 
     db.close()
 
