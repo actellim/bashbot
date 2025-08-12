@@ -29,18 +29,16 @@ def run_agentic_turn(initial_prompt: str, db: DatabaseManager, tool_manifests: l
     """
 
     turn_id = db.get_new_turn_id()
-    messages_for_turn = [{"role": "user", "content": initial_prompt}]
-
     history = db.get_context_messages(CONTEXT_WORD_LIMIT)
+    messages_for_this_turn = [{"role": "user", "content": initial_prompt}]
+    db.add_message(turn_id, "user", initial_prompt)
     final_stats_chunk = {}
 
     #---2: The Agentic Loop---
     for i in range(MAX_AGENT_TURNS):
-        if i == 0:
-            db.add_message(turn_id, "user", initial_prompt)
 
         #---3: API Call---
-        full_message_history = history + messages_for_turn
+        full_message_history = history + messages_for_this_turn
 
         payload = {
                 "model": MODEL_NAME,
