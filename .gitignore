@@ -11,3 +11,5 @@ output.txt
 venv/
 *.env
 .env
+pending.md
+.pending_changes.md

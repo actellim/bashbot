@@ -3,7 +3,6 @@ import os
 import argparse
 import requests
 import sys
-import inspect
 
 from database import DatabaseManager
 from config import *
@@ -20,36 +19,33 @@ def load_tool_manifests(tools_dir: str) -> list:
         if filename.endswith(".json"):
             filepath = os.path.join(tools_dir, filename)
             with open(filepath, 'r') as f:
-                manifest = json.load(f)
-                manifests.append(manifest)
+                manifests.append(json.load(f))
     return manifests
 
-def main():
-    #---1: Setup---
-    parser = argparse.ArgumentParser(description="A command-line AI agent that uses tools.")
-    parser.add_argument("prompt", type=str, help="The initial prompt for the agent.")
-    args = parser.parse_args()
-
-    db = DatabaseManager(DB_PATH)
-    tools_manifests = load_tool_manifests(TOOLS_DIR)
+def run_agentic_turn(initial_prompt: str, db: DatabaseManager, tool_manifests: list):
+    """
+    Runs the full agentic loop for a single user request.
+    This includes reasoning, tool calls, and generating a final response.
+    """
 
     turn_id = db.get_new_turn_id()
+    messages_for_turn = [{"role": "user", "content": initial_prompt}]
 
-    # This list will hold the messages for the current turn as the conversatio nevolves.
-    messages_for_turn = [{"role": "user", "content": args.prompt}]
+    history = db.get_context_messages(CONTEXT_WORD_LIMIT)
+    final_stats_chunk = {}
 
     #---2: The Agentic Loop---
     for i in range(MAX_AGENT_TURNS):
-        #---3: API Call---
-        history = db.get_context_messages(CONTEXT_WORD_LIMIT)
         if i == 0:
-            db.add_message(turn_id, "user", args.prompt)
+            db.add_message(turn_id, "user", initial_prompt)
+
+        #---3: API Call---
         full_message_history = history + messages_for_turn
 
         payload = {
                 "model": MODEL_NAME,
                 "messages": full_message_history,
-                "tools": tools_manifests,
+                "tools": tool_manifests,
                 "stream": True,
                 "think": True
                 }
@@ -58,13 +54,13 @@ def main():
         full_content = ""
         full_thoughts = ""
         tool_calls = []
+
         thinking_printed = False
         response_printed = False
 
         try:
             with requests.post(f"{OLLAMA_HOST}/api/chat", json=payload, stream=True) as response:
                 response.raise_for_status() # Will raise an exception for bad status codes
-                final_stats_chunk = {}
                 for chunk in response.iter_lines():
                     if chunk:
                         chunk_json = json.loads(chunk)
@@ -94,7 +90,6 @@ def main():
 
         except requests.exceptions.RequestException as e:
             print(f"\nAPI Error: Could not connect to Ollama. Is the server running? Details: {e}", file=sys.stderr)
-            db.close()
             return
 
         print() # Final newline after streaming is done.
@@ -104,55 +99,52 @@ def main():
         db.add_message(turn_id, "assistant", full_content, tool_calls, thoughts=full_thoughts)
 
         if not tool_calls:
+            # IT'S A FINAL ANSWER
             print(f"\n{Colors.GREY}---Task Complete---{Colors.RESET}")
             break
 
-        else:
-            print(f"{Colors.GREY}---Executing Tools---{Colors.RESET}")
-            messages_for_turn.append({"role": "assistant", "content": full_content, "tool_calls": tool_calls})
-            for tool_call in tool_calls:
-                tool_name = tool_call['function']['name']
-                tool_args = tool_call['function']['arguments']
+        # IT'S A TOOL CALL
+        messages_for_turn.append({"role": "assistant", "content": full_content, "tool_calls": tool_calls})
 
-                print(f"{Colors.GREY}<Executing tool: {tool_name}({json.dumps(tool_args)})>{Colors.RESET}")
+        for tool_call in tool_calls:
+            tool_name = tool_call['function']['name']
+            tool_args = tool_call['function']['arguments']
 
-                if tool_name in AVAILABLE_TOOLS:
-                    tool_function = AVAILABLE_TOOLS[tool_name]
+            print(f"\n{Colors.GREY}<Executing tool: {tool_name}({json.dumps(tool_args)})>{Colors.RESET}")
+
+            if tool_name in AVAILABLE_TOOLS:
+                tool_function = AVAILABLE_TOOLS[tool_name]
+                try:
+                    import inspect
                     func_sig = inspect.signature(tool_function)
-
-                    final_tool_args = tool_args.copy()
+                    final_tool_args = tool_args
                     if 'db' in func_sig.parameters:
                         final_tool_args['db'] = db
 
-                    try:
-                        result_content = str(tool_function(**final_tool_args))
-                    except Exception as e:
-                        result_content = f"[TOOL_ERROR] An unexpected error occurred: {e}"
+                    result_content = str(tool_function(**final_tool_args))
+                except Exception as e:
+                    result_content = f"[TOOL_ERROR] An unexpected error occurred: {e}"
 
-                    tool_response_message = {"role": "tool", "content": result_content}
-                    messages_for_turn.append(tool_response_message)
-                    db.add_message(turn_id, "tool", result_content)
-                    print(f"{Colors.GREY}<Tool Output>\n{result_content}\n</Tool Output>{Colors.RESET}")
-
-                else:
-                    print(f"{Colors.GREY}[TOOL_ERROR] Model tried to call unknown tool: {tool_name}{Colors.RESET}")
-                    error_message = f"Tool '{tool_name}' not found."
-                    messages_for_turn.append({"role": "tool", "content": error_message})
-                    db.add_message(turn_id, "tool", error_message)
-                    
-
+                tool_response_message = {"role": "tool", "content": result_content}
+                messages_for_turn.append(tool_response_message)
+                db.add_message(turn_id, "tool", result_content)
+                print(f"{Colors.GREY}<Tool Output>\n{result_content}\n</Tool Output>{Colors.RESET}")
+            else:
+                error_message = f"Tool '{tool_name}' not found."
+                print(f"{Colors.GREY}[TOOL_ERROR] {error_message}{Colors.RESET}")
+                messages_for_turn.append({"role": "tool", "content": error_message})
+                db.add_message(turn_id, "tool", error_message)
+            
     #---6: Print Metrics---
+    # This block now runs after the agentic loop (for i in range...) is finished.
     if final_stats_chunk:
         prompt_tokens = final_stats_chunk.get('prompt_eval_count', 0)
         response_tokens = final_stats_chunk.get('eval_count', 0)
-        total_tokens = prompt_tokens + response_tokens
 
-        # Calc the tokens per second (eval duration is in ns)
         eval_duration_ns = final_stats_chunk.get('eval_duration', 1)
-        tokens_per_sec = response_tokens / (eval_duration_ns / 1_000_000_000)
+        # Prevent division by zero if duration is 0
+        tokens_per_sec = response_tokens / (eval_duration_ns / 1_000_000_000) if eval_duration_ns > 0 else 0
 
-        # Get total context from the modelfile para, which we'll store in config.
-        # For now, we'll use a placeholder from config.py 
         total_context = MODEL_CONTEXT_WINDOW
 
         print(f"\n{Colors.GREY}---Metrics---")
@@ -160,6 +152,50 @@ def main():
         print(f"Output: {response_tokens} tokens")
         print(f"Speed: {tokens_per_sec:.2f} tokens/sec")
         print(f"-------------{Colors.RESET}")
+
+def run_interactive_mode(db: DatabaseManager, tool_manifests: list):
+    """Starts a continuous chat session that uses the full agentic loop."""
+    print("--- Bashbot Interactive Mode ---")
+    print("Type 'exit' or 'quit' to end the session.")
+    
+    while True:
+        try:
+            prompt = input("\n> ")
+            if prompt.lower() in ["exit", "quit"]:
+                break
+            if not prompt: # Handle empty input
+                continue
+            
+            # For each line of input, we simply call our main agentic function.
+            # It will handle its own database saving, context retrieval, and tool use.
+            run_agentic_turn(prompt, db, tool_manifests)
+
+        except KeyboardInterrupt:
+            # Allows for a clean exit with Ctrl+C
+            print("\nExiting...")
+            break
+
+def main():
+    """Main entry point, parses arguments and routes to the correct mode."""
+    parser = argparse.ArgumentParser(description="A command-line AI agent that uses tools.")
+    parser.add_argument("prompt", nargs='?', default=None, help="The initial prompt for the agent in one-shot mode.")
+    parser.add_argument("--agent", type=str, dest='agent_goal', help="Run in autonomous agent mode with the given high-level goal.")
+    args = parser.parse_args()
+
+    db = DatabaseManager(DB_PATH)
+    tool_manifests = load_tool_manifests(TOOLS_DIR)
+
+    if args.agent_goal:
+        print(f"---Autonomous Agent Mode---")
+        print(f"Goal: {args.agent_goal}")
+        print("Note: Autonomous mode is not yet implemented")
+        # Future: call run_autonomous_mode(args.agent_goal, db, tool_manifests)
+    elif args.prompt:
+        #---One-Shot---
+        run_agentic_turn(args.prompt, db, tool_manifests)
+    else:
+        #---Interactive---
+        run_interactive_mode(db, tool_manifests)
 
     db.close()
 
