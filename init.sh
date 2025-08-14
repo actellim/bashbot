@@ -5,11 +5,15 @@
 
 echo "--- Starting Bashbot Setup ---"
 
-# --- 1. Ensure Ollama is Installed/Updated ---
-# As requested, we run the installer directly. It is idempotent and
-# will only install or update if necessary.
-echo "--- Ensuring Ollama is installed/updated ---"
-curl -fsSL https://ollama.com/install.sh | sh
+
+# --- 1. Check & Install Ollama ---
+if ! command -v ollama &> /dev/null
+then
+    echo "Ollama is not found. Installing now..."
+    curl -fsSL https://ollama.com/install.sh | sh
+else
+    echo "Ollama is already installed."
+fi
 
 # --- 2. Setup Python Virtual Environment ---
 echo -e "\n--- Setting up Python virtual environment in './venv' ---"
