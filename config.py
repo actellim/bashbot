@@ -8,6 +8,9 @@ OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434")
 MODEL_NAME = os.getenv("MODEL_NAME", "bashbot")
 BASE_MODEL = os.getenv("BASE_MODEL", "gpt-oss:latest")
 MODEL_CONTEXT_WINDOW = int(os.getenv("MODEL_CONTEXT_WINDOW", 24000))
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "nomic-embed-text:latest")
+EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", 768))
+VECTOR_SIMILARITY_THRESHOLD = float(os.getenv("VECTOR_SIMILARITY_THRESHOLD", 1.0))
 
 #---Agent Config---
 CONTEXT_WORD_LIMIT = int(os.getenv("CONTEXT_WORD_LIMIT", 1800))

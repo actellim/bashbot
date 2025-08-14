@@ -13,3 +13,6 @@ venv/
 .env
 pending.md
 .pending_changes.md
+test_*.py
+run_tool.py
+test_memory.db

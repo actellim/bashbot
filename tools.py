@@ -1,25 +1,45 @@
 from database import DatabaseManager
 from config import SEARXNG_HOST, SEARCH_RESULTS_TO_SHOW
+from embedding import get_embedding
 
+import numpy as np
 import requests
 from urllib.parse import quote
-from bs4 import BeautifulSoup
+# from bs4 import BeautifulSoup
 
 
 #---Tool Functions---
 def memory_query(db: DatabaseManager, query: str) -> str:
     """
-    Searches the conversation memroy for a specific keyword or phrase.
-    This is the actual Python function that gets executed when the 'memory_query' tool is called.
+    Finds the most semantically similar memories to a given query 
+    using vecotr search (RAG).
     """
-    # print(f"[DEBUG_TOOL] Executing memory_query with query: '{query}'")
+    print(f"[DEBUG_TOOL] Executing RAG memory_query with query: '{query}'")
     if not query:
         return "[TOOL_ERROR] No search term provided."
 
     try:
-        # The search_memory function in our database manager does allllll the heavy lifting.
-        results = db.search_memory(search_term=query)
-        return results
+        # ---1: Get embedding from query.
+        query_vector = get_embedding(query)
+        if not query_vector:
+            return "[TOOL_ERROR] Could not generate embedding for the query."
+
+        query_np_vector = np.array(query_vector, dtype=np.float32)
+
+        # ---2: Call the vector search function from the db.
+        similar_memories = db.find_similar_memories(query_np_vector, top_k=3) # Get top 3
+
+        if not similar_memories:
+            return f"No relevant memories found for '{query}'."
+
+        # ---3: Format the results into a string.
+        output = f"---Relevant Memories Found for '{query}'---\n\n"
+        for memory in similar_memories:
+            output += f"Memory (Turn ID: {memory['turn_id']}, Role: {memory['role']}):\n"
+            output += f"{memory['content']}\n\n"
+
+        return output.strip()
+
     except Exception as e:
         return f"[TOOL_ERROR] An error occurred while searching memory: {e}"
 

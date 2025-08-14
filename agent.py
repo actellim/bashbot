@@ -3,7 +3,9 @@ import os
 import argparse
 import requests
 import sys
+import numpy as np
 
+from embedding import get_embedding
 from database import DatabaseManager
 from config import *
 from tools import AVAILABLE_TOOLS
@@ -29,16 +31,40 @@ def run_agentic_turn(initial_prompt: str, db: DatabaseManager, tool_manifests: l
     """
 
     turn_id = db.get_new_turn_id()
-    history = db.get_context_messages(CONTEXT_WORD_LIMIT)
-    messages_for_this_turn = [{"role": "user", "content": initial_prompt}]
     db.add_message(turn_id, "user", initial_prompt)
+    history = db.get_long_term_history(current_turn_id=turn_id)
     final_stats_chunk = {}
 
     #---2: The Agentic Loop---
     for i in range(MAX_AGENT_TURNS):
 
         #---3: API Call---
-        full_message_history = history + messages_for_this_turn
+        messages_for_this_turn = db.get_messages_for_turn(turn_id=turn_id)
+        # Get relevent associateve memories using most recent message as query source.
+        rag_query_text = messages_for_this_turn[-1]['content']
+        print(f"{Colors.GREY}[CONTEXT] Searching for memories related to: '{rag_query_text[:50]}...'{Colors.RESET}")
+
+        query_vector = get_embedding(rag_query_text)
+        important_memories = []
+        if query_vector:
+            query_np_vector = np.array(query_vector, dtype=np.float32)
+            similar_memories = db.find_similar_memories(query_np_vector, top_k=5)
+
+            turn_content = {msg['content'] for msg in messages_for_this_turn}
+            history_content = {msg['content'] for msg in history}
+            content_to_ignore = turn_content | history_content
+            relevant_memories = [mem for mem in similar_memories if mem['content'] not in content_to_ignore]
+
+            if relevant_memories:
+                rag_context_content = "---Relevant Long-Term Memories---\n"
+                for mem in relevant_memories:
+                    rag_context_content += f"Memory from Turn {mem['turn_id']} ({mem['role']}): {mem['content']}\n"
+                # Add the RAG context as the first system message.
+                important_memories = [{"role": "system", "content": rag_context_content.strip()}]
+
+        # Assemble the full message history for the API call
+        full_message_history = important_memories + history + messages_for_this_turn
+        print(f"The message being sent to the bot now is {full_message_history}.")
 
         payload = {
                 "model": MODEL_NAME,
@@ -101,9 +127,6 @@ def run_agentic_turn(initial_prompt: str, db: DatabaseManager, tool_manifests: l
             print(f"\n{Colors.GREY}---Task Complete---{Colors.RESET}")
             break
 
-        # IT'S A TOOL CALL
-        messages_for_turn.append({"role": "assistant", "content": full_content, "tool_calls": tool_calls})
-
         for tool_call in tool_calls:
             tool_name = tool_call['function']['name']
             tool_args = tool_call['function']['arguments']
@@ -123,14 +146,11 @@ def run_agentic_turn(initial_prompt: str, db: DatabaseManager, tool_manifests: l
                 except Exception as e:
                     result_content = f"[TOOL_ERROR] An unexpected error occurred: {e}"
 
-                tool_response_message = {"role": "tool", "content": result_content}
-                messages_for_turn.append(tool_response_message)
                 db.add_message(turn_id, "tool", result_content)
                 print(f"{Colors.GREY}<Tool Output>\n{result_content}\n</Tool Output>{Colors.RESET}")
             else:
                 error_message = f"Tool '{tool_name}' not found."
                 print(f"{Colors.GREY}[TOOL_ERROR] {error_message}{Colors.RESET}")
-                messages_for_turn.append({"role": "tool", "content": error_message})
                 db.add_message(turn_id, "tool", error_message)
             
     #---6: Print Metrics---
