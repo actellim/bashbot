@@ -9,8 +9,6 @@ raw_chat_stream.log
 *.log
 output.txt
 venv/
-*.env
-.env
 pending.md
 .pending_changes.md
 test_*.py
