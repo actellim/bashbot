@@ -64,7 +64,7 @@ def run_agentic_turn(initial_prompt: str, db: DatabaseManager, tool_manifests: l
 
         # Assemble the full message history for the API call
         full_message_history = important_memories + history + messages_for_this_turn
-        print(f"The message being sent to the bot now is {full_message_history}.")
+        # print(f"The message being sent to the bot now is {full_message_history}.")
 
         payload = {
                 "model": MODEL_NAME,
