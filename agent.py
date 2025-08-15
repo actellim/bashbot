@@ -42,7 +42,7 @@ def run_agentic_turn(initial_prompt: str, db: DatabaseManager, tool_manifests: l
         messages_for_this_turn = db.get_messages_for_turn(turn_id=turn_id)
         # Get relevent associateve memories using most recent message as query source.
         rag_query_text = messages_for_this_turn[-1]['content']
-        print(f"{Colors.GREY}[CONTEXT] Searching for memories related to: '{rag_query_text[:50]}...'{Colors.RESET}")
+        # print(f"{Colors.GREY}[CONTEXT] Searching for memories related to: '{rag_query_text[:50]}...'{Colors.RESET}")
 
         query_vector = get_embedding(rag_query_text)
         important_memories = []
