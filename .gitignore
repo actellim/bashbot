@@ -16,3 +16,5 @@ run_tool.py
 test_memory.db
 
 project_map.md
+
+.idx/
