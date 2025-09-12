@@ -24,6 +24,7 @@ def load_tool_manifests(tools_dir: str) -> list:
                 manifests.append(json.load(f))
     return manifests
 
+# currently borked
 def run_agentic_turn(initial_prompt: str, db: DatabaseManager, tool_manifests: list):
     """
     Runs the full agentic loop for a single user request.
@@ -32,7 +33,7 @@ def run_agentic_turn(initial_prompt: str, db: DatabaseManager, tool_manifests: l
 
     turn_id = db.get_new_turn_id()
     db.add_message(turn_id, "user", initial_prompt)
-    history = db.get_long_term_history(current_turn_id=turn_id, limit=100)
+    history = db.get_long_term_history(current_turn_id=turn_id, limit=64)
     final_stats_chunk = {}
 
     #---2: The Agentic Loop---
