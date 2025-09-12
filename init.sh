@@ -81,5 +81,5 @@ fi
 source $BASHRC_FILE
 
 echo -e "\n\n--- Setup Complete! ---"
-echo "To activate the environment in a new terminal, run: source venv/bin/activate"
-echo "You can now run the agent using the launcher script: ./run.sh \"Your prompt here\""
+echo "You can now run the agent using the launcher script: bashbot \"Your prompt here.\""
+

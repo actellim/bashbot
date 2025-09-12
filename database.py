@@ -113,7 +113,7 @@ class DatabaseManager:
         similar_ids = [row[0] for row in similar_ids_and_distances]
 
         placeholders = ','.join('?' for _ in similar_ids)
-        query = f"SELECT * FROM conversations WHERE id IN ({placeholders})"
+        query = f"SELECT id, turn_id, timestamp, role, content, tool_calls, thoughts FROM conversations WHERE id IN ({placeholders})"
 
         cursor.execute(query, similar_ids)
         results_by_id = {dict(row)['id']: dict(row) for row in cursor.fetchall()}
@@ -182,7 +182,6 @@ class DatabaseManager:
         """
         Gets the long-term history from all PREVIOUS turns.
         For now, this fetches the last few chronological messages.
-        This will be upgraded with RAG/vector search later.
         """
         cursor = self.conn.cursor()
         cursor.execute(

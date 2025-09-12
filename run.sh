@@ -27,4 +27,4 @@ fi
 
 # --- Execute the Agent ---
 # Run the agent.py script, which is in the same directory as this launcher.
-python3 "$SCRIPT_DIR/agent.py" "$@"
+python3 "$SCRIPT_DIR/run.py" "$@"

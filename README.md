@@ -25,7 +25,11 @@ The core mission remains the same: to build a modular framework that allows powe
 2.  **Required Models:** The agent needs a primary reasoning model and an embedding model. The setup script will pull them for you.
     -   Reasoning Model: `gpt-oss:latest` (configurable in `.env`)
     -   Embedding Model: `nomic-embed-text:latest` (configurable in `.env`)
-3.  **Python 3 & `venv`:** A working Python 3.10+ environment is required.
+3.  **Python 3 & UV:** A working Python 3.10+ environment is required. This project uses `uv` for fast package management.
+    ```shell
+    # Install uv (if you don't have it)
+    curl -LsSf https://astral.sh/uv/install.sh | sh
+    ```
 
 ### Installation
 
