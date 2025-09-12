@@ -121,20 +121,33 @@ class DatabaseManager:
         return [results_by_id[id] for id in similar_ids if id in results_by_id]
 
     def get_context_messages(self, word_limit: int = 1800) -> list[dict]:
-        """Fetches the most recent messages up to a specified word limit."""
+        """
+        Fetches the most recent messages up to a specified word limit.
+        """
         cursor = self.conn.cursor()
-        cursor.execute("SELECT role, content FROM conversations ORDER BY id ASC")
-        all_messages = [dict(row) for row in cursor.fetchall()]
+        cursor.execute("SELECT role, content, tool_calls, thoughts FROM conversations ORDER BY id ASC")
+        all_rows = cursor.fetchall()
 
         word_count = 0
         context_to_return = []
         
         # Loop through the messages in reverse (from newest to oldest)
-        for message in reversed(all_messages):
-            content = message.get('content', '')
-            num_words = len(content.split())
+        for row in reversed(all_rows):
+            message = {"role": row['role'], "content": row['content']}
+            num_words = 0
+            
+            # Add thoughts to content if they exist
+            if row['thoughts']:
+                thoughts = {"thoughts": row['thoughts']}
+                message['content'] = f"{thoughts['thoughts']}\n{message['content']}"
+            num_words += len(message['content'].split())
 
-            # print(f"[DEBUG] Checking message: '{content[:20]}...' ({num_words} words). Current count: {word_count}")
+            # Parse tool calls
+            if row['tool_calls']:
+                message['tool_calls'] = json.loads(row['tool_calls'])
+            num_words += len(message['tool_calls'].split())
+
+            # Check word count after adding thoughts
 
             # Stop if adding the next message would exceed the limit,
             # but always ensure we include at least one message.
@@ -171,7 +184,7 @@ class DatabaseManager:
             if row['thoughts']:
                 message['content'] = f"<think>{row['thoughts']}</think>\n{row['content']}"
 
-            if row['tool_Calls']:
+            if row['tool_calls']:
                 message['tool_calls'] = json.loads(row['tool_calls'])
 
             messages.append(message)
@@ -309,6 +322,56 @@ if __name__ == "__main__":
         assert isinstance(assistant_message['tool_calls'], list), "tool_calls should be a list."
         assert assistant_message['tool_calls'][0]['function']['name'] == 'web_search', "Tool call was not parsed correctly."
         print("  > PASSED: Correctly reconstructed messages with thoughts and tool calls.")
+
+        # --- Test 4: Verify get_long_term_history with debug print ---
+        print("\n4. Testing get_long_term_history with more data (for Turn 3)...")
+        turn_3_id = db.get_new_turn_id()
+        db.add_message(turn_3_id, "user", "This is a new turn, and it should not appear in the long term history yet.")
+        
+        # Get history *before* this new turn
+        long_term_history_for_turn_3 = db.get_long_term_history(current_turn_id=turn_3_id, limit=10)
+
+        # The user-requested debug print statement
+        print("--- DEBUG: get_long_term_history output ---")
+        print(json.dumps(long_term_history_for_turn_3, indent=2))
+        print("--- END DEBUG ---")
+
+        # Verification: Should include all messages from Turn 1 (2) and Turn 2 (2)
+        assert len(long_term_history_for_turn_3) == 4, "Should retrieve all 4 messages from Turns 1 and 2."
+        
+        # Verify content from Turn 1
+        assert any("my favorite color is blue" in m.get('content', '') for m in long_term_history_for_turn_3)
+        assert any("I will remember that blue" in m.get('content', '') for m in long_term_history_for_turn_3)
+        
+        # Verify content from Turn 2
+        assert any("What is the capital of France?" in m.get('content', '') for m in long_term_history_for_turn_3)
+        assert any("<think>" in m.get('content', '') and "Let me check that for you" in m.get('content', '') for m in long_term_history_for_turn_3)
+        
+        # Verify tool call from Turn 2 is present
+        assistant_message_t2 = next((m for m in long_term_history_for_turn_3 if m['role'] == 'assistant' and 'tool_calls' in m), None)
+        assert assistant_message_t2 is not None, "Assistant message with tool calls from Turn 2 should be in the history."
+        assert assistant_message_t2['tool_calls'][0]['function']['name'] == 'web_search', "Tool call from Turn 2 was not found or is incorrect."
+        
+        print("  > PASSED: Correctly retrieved and verified the full history from previous turns.")
+
+        # --- Test 5: Verify get_context_messages ---
+        print("\n5. Testing get_context_messages with a word limit...")
+        # The most recent message has 16 words.
+        # The one before it has thoughts + content, totaling 19 words.
+        # 16 + 19 = 35, so a limit of 30 should only return the most recent message.
+        context_messages = db.get_context_messages(word_limit=30)
+
+        print("--- DEBUG: get_context_messages output ---")
+        print(json.dumps(context_messages, indent=2))
+        print("--- END DEBUG ---")
+
+        assert len(context_messages) == 1, "Should only retrieve the most recent message due to the word limit."
+        assert "This is a new turn" in context_messages[0]['content'], "The content of the most recent message is incorrect."
+
+        # Now, test with a larger limit to get more messages
+        context_messages_larger = db.get_context_messages(word_limit=100)
+        assert len(context_messages_larger) > 1, "Should retrieve more than one message with a larger word limit."
+        print("  > PASSED: Correctly retrieved messages based on word limit.")
 
     finally:
         # --- Teardown: Ensure the test database is always cleaned up ---

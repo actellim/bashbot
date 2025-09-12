@@ -32,7 +32,7 @@ def run_agentic_turn(initial_prompt: str, db: DatabaseManager, tool_manifests: l
 
     turn_id = db.get_new_turn_id()
     db.add_message(turn_id, "user", initial_prompt)
-    history = db.get_long_term_history(current_turn_id=turn_id, limit=5)
+    history = db.get_long_term_history(current_turn_id=turn_id, limit=50)
     final_stats_chunk = {}
 
     #---2: The Agentic Loop---
@@ -77,7 +77,7 @@ def run_agentic_turn(initial_prompt: str, db: DatabaseManager, tool_manifests: l
         # print("\n---Messages for Turn:\n")
         # print(json.dumps(messages_for_this_turn, indent=2))
         full_message_history = important_memories + history + messages_for_this_turn
-        # print(f"The message being sent to the bot now is {json.dumps(full_message_history, indent=2)}.")
+        print(f"The message being sent to the bot now is {json.dumps(full_message_history, indent=2)}.")
 
         payload = {
                 "model": MODEL_NAME,
