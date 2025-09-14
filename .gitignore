@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 
 memory.db
+memory.db.*
 
 Modelfile
 model_info_*.txt
