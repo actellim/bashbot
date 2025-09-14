@@ -3,6 +3,8 @@ __pycache__/
 
 memory.db
 memory.db.*
+memory.db.main
+memory.db.feature-mcp
 
 Modelfile
 model_info_*.txt

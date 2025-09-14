@@ -88,35 +88,47 @@ class DatabaseManager:
         """
         Finds the top_k most similar messages in the database to a given query vector,
         and returns them in order of similarity.
-        This version uses a subquery to avoid the sqlite3.OperationalError.
         """
         if query_vector is None or query_vector.size == 0:
             return []
 
         cursor = self.conn.cursor()
 
-        # This query uses a JOIN against a subquery to find the k-nearest neighbors.
-        # This is the recommended approach for using LIMIT with sqlite-vec.
+        # Step 1: Query the virtual table to get the top_k nearest neighbors.
+        # The LIMIT clause is essential for the vec0 virtual table.
         cursor.execute(
             """
-            SELECT
-                c.id, c.turn_id, c.timestamp, c.role, c.content, c.tool_calls, c.thoughts
-            FROM conversations c
-            JOIN (
-                SELECT rowid, distance
-                FROM vec_conversations
-                WHERE embedding MATCH ?
-                AND distance < ?
-                ORDER BY distance
-                LIMIT ?
-            ) AS similar_rows ON c.id = similar_rows.rowid
-            ORDER BY similar_rows.distance;
+            SELECT rowid, distance
+            FROM vec_conversations
+            WHERE embedding MATCH ?
+            ORDER BY distance
+            LIMIT ?
             """,
-            (query_vector.tobytes(), VECTOR_SIMILARITY_THRESHOLD, top_k)
+            (query_vector.tobytes(), top_k)
         )
+        similar_ids_and_distances = cursor.fetchall()
+
+        # Step 2: Filter the results by the similarity threshold.
+        # We do this in code to avoid complicating the SQL query for the virtual table.
+        filtered_results = [row for row in similar_ids_and_distances if row['distance'] < VECTOR_SIMILARITY_THRESHOLD]
+
+        if not filtered_results:
+            return []
+
+        # Extract the rowids to fetch the full conversation data.
+        similar_ids = [row['rowid'] for row in filtered_results]
+
+        # Step 3: Fetch the full conversation data for the filtered rowids.
+        placeholders = ','.join('?' for _ in similar_ids)
+        query = f"SELECT id, turn_id, timestamp, role, content, tool_calls, thoughts FROM conversations WHERE id IN ({placeholders})"
+
+        cursor.execute(query, similar_ids)
         
-        results = [dict(row) for row in cursor.fetchall()]
-        return results
+        # Create a dictionary for easy re-ordering.
+        results_by_id = {dict(row)['id']: dict(row) for row in cursor.fetchall()}
+
+        # Return the results in the order of their original similarity.
+        return [results_by_id[id] for id in similar_ids if id in results_by_id]
 
     def get_context_messages(self, word_limit: int = 1800) -> list[dict]:
         """
