@@ -49,7 +49,7 @@ def run_agentic_turn(initial_prompt: str, db: DatabaseManager, tool_manifests: l
         important_memories = []
         if query_vector:
             query_np_vector = np.array(query_vector, dtype=np.float32)
-            similar_memories = db.find_similar_memories(query_np_vector, top_k=5)
+            similar_memories = db.find_similar_memories(query_np_vector, top_k=32)
 
             turn_content = {msg['content'] for msg in messages_for_this_turn}
             history_content = {msg['content'] for msg in history}

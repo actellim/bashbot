@@ -11,8 +11,6 @@ output.txt
 venv/
 pending.md
 .pending_changes.md
-test_*.py
-run_tool.py
 test_memory.db
 
 project_map.md

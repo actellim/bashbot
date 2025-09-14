@@ -6,7 +6,7 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 
 # --- Environment Check ---
 if [ -z "$VIRTUAL_ENV" ] || [ ! -d "$VIRTUAL_ENV" ]; then
-    VENV_ACTIVATE="$SCRIPT_DIR/venv/bin/activate"
+    VENV_ACTIVATE="$SCRIPT_DIR/.venv/bin/activate"
     if [ -f "$VENV_ACTIVATE" ]; then
         echo "Virtual environment not active. Activating..."
         source "$VENV_ACTIVATE"
