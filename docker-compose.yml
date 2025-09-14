@@ -1,0 +1,32 @@
+version: '3.8'
+services:
+  agent-server:
+    build:
+      context: .
+      dockerfile: agent_server/Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    depends_on:
+      - tool-server
+      - mcp-server
+    environment:
+      - MCP_SERVER_URL=http://mcp-server:8080
+
+  tool-server:
+    build:
+      context: .
+      dockerfile: tool_server/Dockerfile
+    ports:
+      - "8001:8001"
+
+  mcp-server:
+    image: gcr.io/path/to/mcp/image:latest # Placeholder for the MCP server image
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./mcp_config:/config
+    command: >
+      mcp-server-binary
+      --config /config/tool_registry.json
