@@ -20,3 +20,8 @@ project_map.md
 
 .idx/
 .env
+
+uv.lock
+pyproject.toml
+.python-version
+create_large_context_model.sh
